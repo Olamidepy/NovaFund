@@ -29,6 +29,7 @@ model User {
   reputationHistory    ReputationHistory[]
   notificationSettings NotificationSetting?
   notifications        Notification[]
+  federationRecord     FederationRecord?
 
   @@map("users")
 }
@@ -354,6 +355,7 @@ enum InvestmentIntentStatus {
   EXPIRED
   EXECUTED
   FAILED
+}
 model Shortlink {
   id        String   @id @default(cuid())
   code      String   @unique
@@ -367,4 +369,21 @@ model Shortlink {
   @@index([projectId])
   @@index([clicks(sort: Desc)])
   @@map("shortlinks")
+}
+
+model FederationRecord {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  stellarPublicKey String    @unique @map("stellar_public_key")
+  stellarAddress   String    @unique @map("stellar_address")
+  userId           String    @unique @map("user_id")
+  verifiedAt       DateTime? @map("verified_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([stellarPublicKey])
+  @@map("federation_records")
 }
