@@ -1,0 +1,12 @@
+# /.well-known/stellar.toml
+NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
+FEDERATION_SERVER="https://novafund.io/federation"
+
+[DOCUMENTATION]
+ORG_NAME="NovaFund"
+ORG_URL="https://novafund.io"
+ORG_DESCRIPTION="Decentralised project funding on the Stellar network."
+
+[[SEP]]
+  protocol="0002"
+  url="https://github.com/stellar/stellar-protocol/blob/master/ecosystem/sep-0002.md"
