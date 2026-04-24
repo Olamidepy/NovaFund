@@ -19,6 +19,12 @@ model User {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
+  // KYC fields for ZK-KYC
+  kycStatus       KycStatus @default(PENDING) @map("kyc_status")
+  zkKycProof      String?   @map("zk_kyc_proof") // ZK proof hash
+  zkKycProvider   String?   @map("zk_kyc_provider") // Provider name (e.g., "violet", "galxe")
+  zkKycVerifiedAt DateTime? @map("zk_kyc_verified_at")
+
   // Notification fields
   email            String? @unique
   pushSubscription Json?   @map("push_subscription")
@@ -125,6 +131,13 @@ enum ProjectStatus {
   COMPLETED
   CANCELLED
   SUSPENDED
+}
+
+enum KycStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
 }
 
 enum EmailDigestMode {
