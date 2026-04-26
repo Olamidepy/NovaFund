@@ -12,9 +12,16 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { AccountingService } from './accounting.service';
 import { EcosystemSyncService } from './ecosystem-sync.service';
 import { StellarInsightsResolver } from './stellar-insights.resolver';
+import { StellarService } from './stellar.service';
+import { ReservesService } from './reserves.service';
+import { OracleModule } from '../oracle/oracle.module';
 
 @Module({
-  imports: [HttpModule, ScheduleModule.forRoot()],
+  imports: [
+    HttpModule,
+    ScheduleModule.forRoot(),
+    OracleModule,
+  ],
   providers: [
     RpcFallbackService,
     PathfinderService,
@@ -24,6 +31,8 @@ import { StellarInsightsResolver } from './stellar-insights.resolver';
     EcosystemSyncService,
     StellarInsightsResolver,
     PrismaService,
+    StellarService,
+    ReservesService,
   ],
   controllers: [
     RpcFallbackController,
@@ -37,6 +46,8 @@ import { StellarInsightsResolver } from './stellar-insights.resolver';
     AssetDiscoveryService,
     AccountingService,
     EcosystemSyncService,
+    StellarService,
+    ReservesService,
   ],
 })
 export class StellarModule {}

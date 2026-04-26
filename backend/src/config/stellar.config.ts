@@ -39,6 +39,33 @@ export default registerAs('stellar', () => ({
   reputationContractId: process.env.REPUTATION_CONTRACT_ID,
   usdcContractId: process.env.STELLAR_USDC_CONTRACT_ID,
   eurcContractId: process.env.STELLAR_EURC_CONTRACT_ID,
+  usdcIssuer: process.env.STELLAR_USDC_ISSUER || 'GBBD67V63DU7C7H7FDUO77Z6YBXCH22YJ6Y7Y7Y7Y7Y7Y7Y7Y7Y7Y7Y7', // Placeholder
+  eurcIssuer: process.env.STELLAR_EURC_ISSUER || 'GDBI67V63DU7C7H7FDUO77Z6YBXCH22YJ6Y7Y7Y7Y7Y7Y7Y7Y7Y7Y7Y7', // Placeholder
+  treasury: {
+    rebalanceThreshold: 0.05, // 5% deviation triggers rebalance
+    wallets: [
+      { 
+        assetCode: 'XLM', 
+        targetRatio: 0.4, // 40% XLM
+        walletAddress: process.env.TREASURY_XLM_WALLET_ADDRESS || '',
+        secretKey: process.env.TREASURY_XLM_SECRET_KEY || '',
+      },
+      { 
+        assetCode: 'USDC', 
+        targetRatio: 0.4, // 40% USDC
+        walletAddress: process.env.TREASURY_USDC_WALLET_ADDRESS || '',
+        secretKey: process.env.TREASURY_USDC_SECRET_KEY || '',
+        issuer: process.env.STELLAR_USDC_ISSUER || 'GBBD67V63DU7C7H7FDUO77Z6YBXCH22YJ6Y7Y7Y7Y7Y7Y7Y7Y7Y7Y7Y7',
+      },
+      { 
+        assetCode: 'EURC', 
+        targetRatio: 0.2, // 20% EURC
+        walletAddress: process.env.TREASURY_EURC_WALLET_ADDRESS || '',
+        secretKey: process.env.TREASURY_EURC_SECRET_KEY || '',
+        issuer: process.env.STELLAR_EURC_ISSUER || 'GDBI67V63DU7C7H7FDUO77Z6YBXCH22YJ6Y7Y7Y7Y7Y7Y7Y7Y7Y7Y7Y7',
+      },
+    ],
+  },
 }));
 
 export const indexerConfig = registerAs('indexer', () => ({
