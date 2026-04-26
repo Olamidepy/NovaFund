@@ -19,16 +19,30 @@ model User {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
+  // KYC fields for ZK-KYC
+  kycStatus       KycStatus @default(PENDING) @map("kyc_status")
+  zkKycProof      String?   @map("zk_kyc_proof") // ZK proof hash
+  zkKycProvider   String?   @map("zk_kyc_provider") // Provider name (e.g., "violet", "galxe")
+  zkKycVerifiedAt DateTime? @map("zk_kyc_verified_at")
+
   // Notification fields
   email            String? @unique
   pushSubscription Json?   @map("push_subscription")
+  isFrozen       Boolean   @default(false) @map("is_frozen")
 
   // Relations
   createdProjects      Project[]            @relation("ProjectCreator")
   contributions        Contribution[]
   reputationHistory    ReputationHistory[]
   notificationSettings NotificationSetting?
+  notificationMatrix   NotificationMatrix[]
   notifications        Notification[]
+  federationRecord     FederationRecord?
+  apiKeys              ApiKey[]
+  freezeReports        AccountFreezeRequest[] @relation("freezeReporter")
+  freezeRequests       AccountFreezeRequest[] @relation("freezeUser")
+  webhookSubscriptions WebhookSubscription[]
+  supportTickets      SupportTicket[]
 
   @@map("users")
 }
@@ -47,6 +61,7 @@ model Project {
   ipfsHash     String?       @map("ipfs_hash")
   status       ProjectStatus @default(ACTIVE)
   tokenAddress String?       @map("token_address")
+  restrictedRegions String[] @default([]) @map("restricted_regions")
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
 
@@ -54,6 +69,7 @@ model Project {
   contributions Contribution[]
   milestones    Milestone[]
   shortlinks    Shortlink[]
+  payoutTiers   ProjectPayoutTier[]
 
   @@map("projects")
 }
@@ -118,6 +134,18 @@ enum ProjectStatus {
   SUSPENDED
 }
 
+enum KycStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+enum EmailDigestMode {
+  INSTANT
+  WEEKLY
+}
+
 enum MilestoneStatus {
   PENDING
   APPROVED
@@ -171,13 +199,31 @@ model NotificationSetting {
   user                User     @relation(fields: [userId], references: [id])
   emailEnabled        Boolean  @default(true) @map("email_enabled")
   pushEnabled         Boolean  @default(false) @map("push_enabled")
+  appEnabled          Boolean  @default(true) @map("app_enabled")
+  smsEnabled          Boolean  @default(false) @map("sms_enabled")
   notifyContributions Boolean  @default(true) @map("notify_contributions")
   notifyMilestones    Boolean  @default(true) @map("notify_milestones")
   notifyDeadlines     Boolean  @default(true) @map("notify_deadlines")
+  emailDigestMode     EmailDigestMode @default(INSTANT) @map("email_digest_mode")
   createdAt           DateTime @default(now()) @map("created_at")
   updatedAt           DateTime @updatedAt @map("updated_at")
 
   @@map("notification_settings")
+}
+
+model NotificationMatrix {
+  id         String                @id @default(cuid())
+  userId     String                @map("user_id")
+  user       User                  @relation(fields: [userId], references: [id])
+  eventType  NotificationType      @map("event_type")
+  channel    NotificationChannel   @map("channel")
+  enabled    Boolean               @default(true)
+  createdAt  DateTime              @default(now()) @map("created_at")
+  updatedAt  DateTime              @updatedAt @map("updated_at")
+
+  @@unique([userId, eventType, channel])
+  @@index([userId])
+  @@map("notification_matrix")
 }
 
 model Notification {
@@ -210,10 +256,90 @@ model EmailOutbox {
   @@map("email_outbox")
 }
 
+model WebhookSubscription {
+  id          String     @id @default(cuid())
+  creatorId   String     @map("creator_id")
+  creator     User       @relation(fields: [creatorId], references: [id])
+  projectId   String?    @map("project_id")
+  targetUrl   String     @map("target_url")
+  secret      String
+  events      Json       @map("events")
+  active      Boolean    @default(true)
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  deliveries  WebhookDelivery[]
+
+  @@index([creatorId])
+  @@index([projectId])
+  @@map("webhook_subscriptions")
+}
+
+model WebhookDelivery {
+  id             String                 @id @default(cuid())
+  subscriptionId String                 @map("subscription_id")
+  subscription   WebhookSubscription    @relation(fields: [subscriptionId], references: [id])
+  eventType      NotificationType       @map("event_type")
+  payload        Json
+  status         WebhookDeliveryStatus  @default(PENDING)
+  attempts       Int                    @default(0)
+  nextAttemptAt  DateTime?              @map("next_attempt_at")
+  lastError      String?                @map("last_error")
+  deliveredAt    DateTime?              @map("delivered_at")
+  createdAt      DateTime               @default(now()) @map("created_at")
+  updatedAt      DateTime               @updatedAt @map("updated_at")
+
+  @@index([subscriptionId])
+  @@index([status])
+  @@index([nextAttemptAt])
+  @@map("webhook_deliveries")
+}
+
+enum FreezeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model AccountFreezeRequest {
+  id          String              @id @default(cuid())
+  userId      String              @map("user_id")
+  user        User                @relation("freezeUser", fields: [userId], references: [id])
+  reporterId  String?             @map("reporter_id")
+  reporter    User?               @relation("freezeReporter", fields: [reporterId], references: [id])
+  reason      String
+  evidenceUrl String?             @map("evidence_url")
+  status      FreezeRequestStatus @default(PENDING)
+  adminNotes  String?             @map("admin_notes")
+  reviewedBy  String?             @map("reviewed_by")
+  reviewedAt  DateTime?           @map("reviewed_at")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([status])
+  @@map("account_freeze_requests")
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  PUSH
+  APP
+}
+
 enum NotificationType {
   CONTRIBUTION
   MILESTONE
   DEADLINE
+  YIELD
   SYSTEM
 }
 
@@ -303,6 +429,69 @@ model YieldEvent {
   @@map("yield_events")
 }
 
+model ProjectPayoutTier {
+  id            String             @id @default(cuid())
+  projectId     String             @map("project_id")
+  project       Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tierOrder     Int                @map("tier_order")
+  recipientType PayoutRecipientType @map("recipient_type")
+  maxAmount     BigInt?            @map("max_amount")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+
+  @@unique([projectId, tierOrder])
+  @@index([projectId])
+  @@map("project_payout_tiers")
+}
+
+enum PayoutRecipientType {
+  INVESTORS
+  CREATOR
+  PLATFORM
+  RESERVE
+}
+
+model OperationalCost {
+  id               String   @id @default(cuid())
+  date             DateTime @unique
+  totalFeeCharged  BigInt   @default(0) @map("total_fee_charged")
+  eventCount       Int      @default(0) @map("event_count")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@index([date])
+  @@map("operational_costs")
+}
+
+model OperationalCostEvent {
+  id               String   @id @default(cuid())
+  txHash           String?  @map("tx_hash")
+  source           String
+  feeCharged       BigInt   @map("fee_charged")
+  ledger           Int?     
+  capturedAt       DateTime @default(now()) @map("captured_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([capturedAt])
+  @@index([source])
+  @@map("operational_cost_events")
+}
+
+model StellarEcosystemSnapshot {
+  id                String   @id @default(cuid())
+  snapshotDate      DateTime @unique @map("snapshot_date")
+  topTradedAssets   Json     @map("top_traded_assets")
+  dexVolume24h      BigInt   @default(0) @map("dex_volume_24h")
+  rwaDexVolume24h   BigInt   @default(0) @map("rwa_dex_volume_24h")
+  source            String   @default("horizon")
+  capturedAt        DateTime @default(now()) @map("captured_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@index([capturedAt])
+  @@map("stellar_ecosystem_snapshots")
+}
+
 model TokenPrice {
   id        String   @id @default(cuid())
   symbol    String
@@ -314,6 +503,47 @@ model TokenPrice {
   @@map("token_prices")
 }
 
+model InvestmentIntent {
+  id                      String                   @id @default(cuid())
+  projectId               String                   @map("project_id")
+  investorId              String                   @map("investor_id")
+  investmentAmount        BigInt                   @map("investment_amount")
+  userAssetCode           String                   @map("user_asset_code")
+  userAssetIssuer         String?                  @map("user_asset_issuer")
+  projectAssetCode        String                   @map("project_asset_code")
+  projectAssetIssuer      String                   @map("project_asset_issuer")
+  
+  // Proposed swap route details
+  bestRouteHopCount       Int                      @default(0) @map("best_route_hop_count")
+  bestRouteFeePercentage  Decimal                  @default(0) @db.Decimal(10, 6) @map("best_route_fee_percentage")
+  bestRouteConversionRate Decimal                  @default(1) @db.Decimal(20, 8) @map("best_route_conversion_rate")
+  routeJson               Json                     @map("route_json")
+  
+  // Status tracking
+  status                  InvestmentIntentStatus   @default(PENDING)
+  expiresAt               DateTime                 @map("expires_at")
+  executedAt              DateTime?                @map("executed_at")
+  rejectionReason         String?                  @map("rejection_reason")
+  
+  // Audit
+  createdAt               DateTime                 @default(now()) @map("created_at")
+  updatedAt               DateTime                 @updatedAt @map("updated_at")
+
+  @@index([projectId])
+  @@index([investorId])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("investment_intents")
+}
+
+enum InvestmentIntentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+  EXECUTED
+  FAILED
+}
 model Shortlink {
   id        String   @id @default(cuid())
   code      String   @unique
@@ -327,4 +557,179 @@ model Shortlink {
   @@index([projectId])
   @@index([clicks(sort: Desc)])
   @@map("shortlinks")
+}
+
+model FederationRecord {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  stellarPublicKey String    @unique @map("stellar_public_key")
+  stellarAddress   String    @unique @map("stellar_address")
+  userId           String    @unique @map("user_id")
+  verifiedAt       DateTime? @map("verified_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([stellarPublicKey])
+  @@map("federation_records")
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  scopes    String[] // e.g., ["investments:read", "milestones:update"]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("api_keys")
+}
+
+enum SupportTicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_ON_USER
+  RESOLVED
+  CLOSED
+}
+
+enum SupportProvider {
+  INTERCOM
+  ZENDESK
+}
+
+model SupportTicket {
+  id              String                 @id @default(cuid())
+  userId          String                 @map("user_id")
+  user            User                   @relation(fields: [userId], references: [id])
+  subject         String
+  description     String
+  priority        SupportTicketPriority  @default(MEDIUM)
+  status          SupportTicketStatus    @default(OPEN)
+  provider        SupportProvider        @default(INTERCOM)
+  providerTicketId String?              @map("provider_ticket_id")
+  conversationUrl String?              @map("conversation_url")
+  onChainContext  Json?                  @map("on_chain_context")
+  assignedTo      String?                @map("assigned_to")
+  tags            String[]               @default([])
+  resolvedAt      DateTime?              @map("resolved_at")
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+
+  messages        SupportMessage[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([provider, providerTicketId])
+  @@map("support_tickets")
+}
+
+model SupportMessage {
+  id        String   @id @default(cuid())
+  ticketId  String   @map("ticket_id")
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id])
+  senderId  String?  @map("sender_id")
+  senderRole String  @default("USER") // USER | AGENT | SYSTEM
+  body      String
+  attachments Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([ticketId])
+  @@map("support_messages")
+}
+
+model DiscoveredAsset {
+  id                String              @id @default(cuid())
+  assetCode         String              @map("asset_code")
+  assetIssuer       String?             @map("asset_issuer")
+  assetType         AssetType           @default(CREDIT_ALPHANUM4) @map("asset_type")
+  homeDomain        String?             @map("home_domain")
+  tomlInfo          Json?               @map("toml_info") // TOML file data
+  tags              String[]            @default([]) @map("tags") // e.g., ['RWA', 'Stable', 'DeFi']
+  liquidityScore    Decimal             @default(0) @db.Decimal(10, 4) @map("liquidity_score")
+  volume24h         BigInt              @default(0) @map("volume_24h")
+  holdersCount      Int                 @default(0) @map("holders_count")
+  trustlinesCount   Int                 @default(0) @map("trustlines_count")
+  lastActivity      DateTime?           @map("last_activity")
+  status            AssetDiscoveryStatus @default(DISCOVERED) @map("status")
+  proposedBy        String?             @map("proposed_by") // Worker ID
+  reviewedBy        String?             @map("reviewed_by") // Admin ID
+  reviewedAt        DateTime?           @map("reviewed_at")
+  rejectionReason   String?             @map("rejection_reason")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  @@unique([assetCode, assetIssuer])
+  @@index([status])
+  @@index([liquidityScore(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("discovered_assets")
+}
+
+model WhitelistedAsset {
+  id                String              @id @default(cuid())
+  assetCode         String              @map("asset_code")
+  assetIssuer       String?             @map("asset_issuer")
+  assetType         AssetType           @default(CREDIT_ALPHANUM4) @map("asset_type")
+  homeDomain        String?             @map("home_domain")
+  tomlInfo          Json?               @map("toml_info")
+  tags              String[]            @default([]) @map("tags")
+  category          AssetCategory       @default(OTHER) @map("category")
+  riskLevel         AssetRiskLevel      @default(MEDIUM) @map("risk_level")
+  isActive          Boolean             @default(true) @map("is_active")
+  maxInvestment     BigInt?             @map("max_investment") // Max per user per project
+  minInvestment     BigInt?             @map("min_investment") // Min per user per project
+  whitelistedBy     String              @map("whitelisted_by") // Admin ID
+  whitelistedAt     DateTime            @default(now()) @map("whitelisted_at")
+  lastReviewedAt    DateTime?           @map("last_reviewed_at")
+  reviewNotes       String?             @map("review_notes")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  @@unique([assetCode, assetIssuer])
+  @@index([isActive])
+  @@index([category])
+  @@index([riskLevel])
+  @@map("whitelisted_assets")
+}
+
+enum AssetType {
+  NATIVE              // XLM
+  CREDIT_ALPHANUM4    // 4-character asset code
+  CREDIT_ALPHANUM12   // 12-character asset code
+  LIQUIDITY_POOL_SHARES
+}
+
+enum AssetDiscoveryStatus {
+  DISCOVERED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  WHITELISTED
+}
+
+enum AssetCategory {
+  STABLECOIN
+  RWA         // Real World Assets
+  DEFI
+  UTILITY
+  MEME
+  OTHER
+}
+
+enum AssetRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
 }

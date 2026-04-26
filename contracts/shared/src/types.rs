@@ -83,6 +83,7 @@ pub struct Milestone {
     pub project_id: u64,
     pub description_hash: Hash,
     pub amount: Amount,
+    pub deadline: Timestamp,
     pub status: MilestoneStatus,
     pub proof_hash: Hash,
     pub approval_count: u32,

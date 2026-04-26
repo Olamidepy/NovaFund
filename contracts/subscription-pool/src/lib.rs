@@ -57,6 +57,8 @@ pub struct Subscription {
     pub next_payment: u64,
     pub status: SubscriptionStatus,
     pub failure_count: u32,
+    pub auto_compound: bool,
+    pub compounded_yield: i128,
 }
 
 #[contracterror]
@@ -120,6 +122,7 @@ impl SubscriptionPool {
         subscriber: Address,
         amount: i128,
         period: SubscriptionPeriod,
+        auto_compound: bool,
     ) -> Result<(), Error> {
         subscriber.require_auth();
         if amount < MIN_SUBSCRIPTION {
@@ -148,6 +151,8 @@ impl SubscriptionPool {
             next_payment: current_time,
             status: SubscriptionStatus::Active,
             failure_count: 0,
+            auto_compound,
+            compounded_yield: 0,
         };
 
         let list_key = DataKey::SubscribersList(pool_id);
@@ -233,6 +238,20 @@ impl SubscriptionPool {
                         sub.next_payment = current_time + (sub.period as u32 as u64);
                         sub.failure_count = 0; // Reset failure count on success
                         pool.total_balance += sub.amount;
+
+                        // Yield compounding: reinvest a proportional yield share back into the pool
+                        if sub.auto_compound && pool.total_balance > 0 {
+                            // Simple yield: subscriber's share of pool * a fixed 1% periodic rate
+                            let yield_amount = sub.amount / 100;
+                            if yield_amount > 0 {
+                                sub.compounded_yield += yield_amount;
+                                pool.total_balance += yield_amount;
+                                env.events().publish(
+                                    (symbol_short!("compound"), pool_id),
+                                    (subscriber_addr.clone(), yield_amount),
+                                );
+                            }
+                        }
 
                         env.storage().persistent().set(&sub_key, &sub);
                         env.events().publish(

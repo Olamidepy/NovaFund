@@ -20,7 +20,7 @@ export class KycAuditEntity {
   newStatus: string;
 
   @Column()
-  action: 'APPROVE' | 'REJECT' | 'OVERRIDE';
+  action: 'APPROVE' | 'REJECT' | 'OVERRIDE' | 'ZK_VERIFY' | 'ZK_REVOKE' | 'EXPIRE';
 
   @Column()
   adminId: string;

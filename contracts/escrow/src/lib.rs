@@ -231,6 +231,7 @@ impl EscrowContract {
             project_id,
             description_hash: description_hash.clone(),
             amount,
+            deadline: env.ledger().timestamp() + 30 * 86400, // 30 days default
             status: MilestoneStatus::Pending,
             proof_hash: empty_hash,
             approval_count: 0,
@@ -802,6 +803,78 @@ impl EscrowContract {
     /// Inspect the current emergency rescue state for a project.
     pub fn get_emergency_withdraw_state(env: Env, project_id: u64) -> EmergencyWithdrawState {
         storage::get_emergency_withdraw_state(&env, project_id)
+    }
+
+    /// Request an extension for a milestone deadline
+    pub fn request_extension(
+        env: Env,
+        project_id: u64,
+        milestone_id: u64,
+        new_deadline: u64,
+    ) -> Result<(), Error> {
+        let escrow = get_escrow(&env, project_id)?;
+        escrow.creator.require_auth();
+
+        let milestone = get_milestone(&env, project_id, milestone_id)?;
+
+        // Ensure new deadline is in the future
+        if new_deadline <= env.ledger().timestamp() {
+            return Err(Error::InvInput);
+        }
+
+        // Initialize extension request
+        let req = ExtensionRequest {
+            new_deadline,
+            approvals: Vec::new(&env),
+        };
+        storage::set_extension_request(&env, project_id, milestone_id, &req);
+
+        env.events().publish(
+            (MILESTONE_EXT_REQ,),
+            (project_id, milestone_id, new_deadline),
+        );
+
+        Ok(())
+    }
+
+    /// Approve an extension request for a milestone deadline
+    pub fn approve_extension(
+        env: Env,
+        project_id: u64,
+        milestone_id: u64,
+        validator: Address,
+    ) -> Result<(), Error> {
+        validator.require_auth();
+
+        let escrow = get_escrow(&env, project_id)?;
+        validation::validate_validator(&escrow, &validator)?;
+
+        let mut req = storage::get_extension_request(&env, project_id, milestone_id)?;
+        let mut milestone = get_milestone(&env, project_id, milestone_id)?;
+
+        if req.approvals.contains(&validator) {
+            return Err(Error::AlreadyVoted);
+        }
+
+        req.approvals.push_back(validator.clone());
+        let total_validators = escrow.validators.len() as u32;
+        // >= 51% of project investors (validators)
+        let required_approvals = (total_validators * 51 + 99) / 100;
+
+        if req.approvals.len() as u32 >= required_approvals {
+            milestone.deadline = req.new_deadline;
+            set_milestone(&env, project_id, milestone_id, &milestone);
+            storage::clear_extension_request(&env, project_id, milestone_id);
+
+            env.events().publish(
+                (MILESTONE_EXT_APPR,),
+                (project_id, milestone_id, req.new_deadline),
+            );
+        } else {
+            storage::set_extension_request(&env, project_id, milestone_id, &req);
+        }
+
+        Ok(())
     }
 
     /// Initiate a dispute on a milestone

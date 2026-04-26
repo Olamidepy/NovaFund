@@ -5,6 +5,7 @@ pub const PROJECT_CREATED: Symbol = symbol_short!("proj_new");
 pub const PROJECT_FUNDED: Symbol = symbol_short!("proj_fund");
 pub const PROJECT_COMPLETED: Symbol = symbol_short!("proj_done");
 pub const PROJECT_FAILED: Symbol = symbol_short!("proj_fail");
+pub const PROJECT_CANCELLED: Symbol = symbol_short!("proj_canc");
 pub const RWA_METADATA_UPDATED: Symbol = symbol_short!("rwa_meta");
 
 // Contribution events
@@ -20,6 +21,8 @@ pub const MILESTONE_SUBMITTED: Symbol = symbol_short!("m_submit");
 pub const MILESTONE_APPROVED: Symbol = symbol_short!("m_apprv");
 pub const MILESTONE_REJECTED: Symbol = symbol_short!("m_reject");
 pub const MILESTONE_COMPLETED: Symbol = symbol_short!("milestone");
+pub const MILESTONE_EXT_REQ: Symbol = symbol_short!("m_ext_req");
+pub const MILESTONE_EXT_APPR: Symbol = symbol_short!("m_ext_app");
 pub const VALIDATORS_UPDATED: Symbol = symbol_short!("v_update");
 
 // Dispute events

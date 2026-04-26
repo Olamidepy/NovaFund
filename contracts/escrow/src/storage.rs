@@ -2,7 +2,7 @@ use shared::errors::Error;
 use shared::types::{
     Amount, Dispute, EscrowInfo, JurorInfo, Milestone, PauseState, PendingUpgrade, VoteCommitment,
 };
-use soroban_sdk::{Address, Env, Vec};
+use soroban_sdk::{contracttype, Address, Env, Vec};
 
 use crate::{EmergencyWithdrawState, EmergencyWithdrawStatus};
 
@@ -361,3 +361,28 @@ pub fn set_emergency_withdraw_state(env: &Env, project_id: u64, state: &Emergenc
     let key = (EMERGENCY_WITHDRAW_PREFIX, project_id);
     env.storage().persistent().set(&key, state);
 }
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ExtensionRequest {
+    pub new_deadline: u64,
+    pub approvals: Vec<Address>,
+}
+
+const EXTENSION_REQUEST_PREFIX: &str = "ext_req";
+
+pub fn get_extension_request(env: &Env, project_id: u64, milestone_id: u64) -> Result<ExtensionRequest, Error> {
+    let key = (EXTENSION_REQUEST_PREFIX, project_id, milestone_id);
+    env.storage().persistent().get::<(&str, u64, u64), ExtensionRequest>(&key).ok_or(Error::NotFound)
+}
+
+pub fn set_extension_request(env: &Env, project_id: u64, milestone_id: u64, req: &ExtensionRequest) {
+    let key = (EXTENSION_REQUEST_PREFIX, project_id, milestone_id);
+    env.storage().persistent().set(&key, req);
+}
+
+pub fn clear_extension_request(env: &Env, project_id: u64, milestone_id: u64) {
+    let key = (EXTENSION_REQUEST_PREFIX, project_id, milestone_id);
+    env.storage().persistent().remove(&key);
+}
+

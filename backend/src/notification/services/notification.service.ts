@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import * as sgMail from '@sendgrid/mail';
 import { PrismaService } from '../../prisma.service';
 import twilio from 'twilio';
+import { PreferencesService } from './preferences.service';
 
 @Injectable()
 export class NotificationService {
@@ -13,6 +14,7 @@ export class NotificationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly preferencesService: PreferencesService,
   ) {
     const sendgridKey = this.config.get<string>('SENDGRID_API_KEY');
     if (sendgridKey) sgMail.setApiKey(sendgridKey);
@@ -55,15 +57,16 @@ export class NotificationService {
       notifyDeadlines: true,
     };
 
-    // Preference filtering
+    // Legacy preference filtering (keep for backward compatibility)
     if (type === 'CONTRIBUTION' && !settings.notifyContributions) return;
     if (type === 'MILESTONE' && !settings.notifyMilestones) return;
     if (type === 'DEADLINE' && !settings.notifyDeadlines) return;
 
     const tasks: Promise<any>[] = [];
 
-    // Email
-    if (settings.emailEnabled && user.email) {
+    // Email - check granular preference
+    const emailEnabled = await this.preferencesService.isEnabled(userId, type, 'EMAIL');
+    if (emailEnabled && settings.emailEnabled && user.email) {
       tasks.push(
         this.queueEmail({
           to: user.email,
@@ -73,14 +76,31 @@ export class NotificationService {
       );
     }
 
-    // Push
-    if (settings.pushEnabled && user.pushSubscription) {
+    // Push - check granular preference
+    const pushEnabled = await this.preferencesService.isEnabled(userId, type, 'PUSH');
+    if (pushEnabled && settings.pushEnabled && user.pushSubscription) {
       tasks.push(
         this.sendWebPush(user.pushSubscription, {
           title,
           body: message,
           data,
         }),
+      );
+    }
+
+    // SMS - check granular preference (if SMS is enabled globally)
+    const smsEnabled = await this.preferencesService.isEnabled(userId, type, 'SMS');
+    if (smsEnabled && settings.smsEnabled && user.profileData?.phone && this.twilioClient) {
+      tasks.push(
+        this.sendSms(user.profileData.phone, title, message),
+      );
+    }
+
+    // App notification - check granular preference
+    const appEnabled = await this.preferencesService.isEnabled(userId, type, 'APP');
+    if (appEnabled && settings.appEnabled) {
+      tasks.push(
+        this.createInAppNotification(userId, type, title, message, data),
       );
     }
 
@@ -198,13 +218,13 @@ export class NotificationService {
   // 🔹 SMS
   // ─────────────────────────────────────────────────────────────
 
-  private async sendSms(to: string, milestoneTitle: string, disputeUrl: string) {
+  private async sendSms(to: string, title: string, message: string) {
     if (!this.twilioClient) return;
 
     await this.twilioClient.messages.create({
       to,
       from: this.config.get<string>('TWILIO_PHONE_NUMBER'),
-      body: `Dispute: ${milestoneTitle}\n${disputeUrl}`,
+      body: `${title}\n${message}`,
     });
   }
 
@@ -220,6 +240,24 @@ export class NotificationService {
   // ─────────────────────────────────────────────────────────────
   // 🔹 IN-APP NOTIFICATIONS
   // ─────────────────────────────────────────────────────────────
+
+  private async createInAppNotification(
+    userId: string,
+    type: string,
+    title: string,
+    message: string,
+    data?: any,
+  ) {
+    await this.prisma.notification.create({
+      data: {
+        userId,
+        type: type as any,
+        title,
+        message,
+        data,
+      },
+    });
+  }
 
   // ─────────────────────────────────────────────────────────────
   // 🔹 EMAIL TEMPLATE

@@ -62,6 +62,8 @@ export default function ReviewStep({ data, onEdit }: ReviewStepProps) {
                   alt="Project" 
                   fill
                   className="object-cover"
+                  placeholder="blur"
+                  blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mOMjY39zwAEhQJnxZ6A3QAAAABJRU5ErkJggg=="
                   unoptimized
                 />
               </div>

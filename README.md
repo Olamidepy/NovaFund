@@ -96,6 +96,14 @@ Each project is governed by a dedicated smart contract that defines:
 - **Reduced Fees**: Platform incentives for reliable creators
 - **Governance Rights**: Participate in platform decision-making
 
+### 7. 🔒 Zero-Knowledge KYC (ZK-KYC)
+
+- **Privacy-Preserving**: Verify identity without storing personal data
+- **Cryptographic Proofs**: Only ZK proofs stored on-chain, never raw PII
+- **Multiple Providers**: Support for Violet, Galxe, and other ZK-KYC providers
+- **Regulatory Compliance**: Meet KYC requirements while maximizing user privacy
+- **Reduced Liability**: Minimize platform exposure to sensitive user data
+
 ---
 
 ## 🏗️ Architecture

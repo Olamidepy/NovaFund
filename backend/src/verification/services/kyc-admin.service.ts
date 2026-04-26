@@ -52,4 +52,11 @@ export class KycAdminService {
       adminId,
     );
   }
+
+  async expireKyc(userId: string, adminId: string, reason?: string) {
+    return this.overrideKyc(
+      { userId, status: KycStatus.EXPIRED, reason },
+      adminId,
+    );
+  }
 }

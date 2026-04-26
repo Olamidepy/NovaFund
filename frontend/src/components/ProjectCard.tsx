@@ -8,6 +8,10 @@ import { cn } from "@/lib/utils";
 import { LikeButton } from "@/components/social/LikeButton";
 import { ShareButton } from "@/components/social/ShareButton";
 import { SocialStats } from "@/components/social/SocialStats";
+import Image from "next/image";
+
+const BLUR_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mOMjY39zwAEhQJnxZ6A3QAAAABJRU5ErkJggg==";
+
 
 export interface Project {
   id: string;
@@ -81,17 +85,28 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
             style.gradient
           )}
         >
+          {project.imageUrl && (
+            <Image
+              src={project.imageUrl}
+              alt={project.title}
+              fill
+              className="object-cover z-0"
+              placeholder="blur"
+              blurDataURL={BLUR_DATA_URL}
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            />
+          )}
           {/* Animated Icon Background */}
           <motion.div
             animate={{ rotate: 360 }}
             transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-            className="absolute inset-0 opacity-10"
+            className="absolute inset-0 opacity-10 z-0"
           >
             <IconComponent className="h-32 w-32 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
           </motion.div>
 
           {/* Gradient Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/50 via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/50 via-slate-950/20 to-transparent z-10" />
 
           {/* Category Badge */}
           <div className="absolute right-4 top-4 z-10">

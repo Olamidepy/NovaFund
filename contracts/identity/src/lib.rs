@@ -3,6 +3,8 @@
 use shared::types::Jurisdiction;
 use soroban_sdk::{contract, contractimpl, contracttype, Address, Bytes, Env};
 
+const ATTESTATION_TTL: u64 = 86_400; // 24 hours in seconds
+
 /// Verification status for a specific user and jurisdiction
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -13,10 +15,19 @@ pub struct IdentityRecord {
     pub tier: u32,
 }
 
+/// Short-lived attestation cached in Instance storage for high-frequency reads
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct Attestation {
+    pub tier: u32,
+    pub expires_at: u64,
+}
+
 #[contracttype]
 pub enum DataKey {
     Admin,
-    Verification(Address, Jurisdiction), // (Address, Jurisdiction) -> IdentityRecord
+    Verification(Address, Jurisdiction), // persistent: full record
+    Attestation(Address, Jurisdiction),  // instance: 24h cache
     Oracle(Address),                     // Oracle Address -> bool (is whitelisted)
 }
 
@@ -53,16 +64,27 @@ impl IdentityContract {
             panic!("Invalid proof");
         }
 
+        let now = env.ledger().timestamp();
+
         let record = IdentityRecord {
             is_verified: true,
-            verified_at: env.ledger().timestamp(),
+            verified_at: now,
             proof_hash: env.crypto().sha256(&proof).into(),
             tier,
         };
 
         env.storage()
             .persistent()
-            .set(&DataKey::Verification(user, jurisdiction), &record);
+            .set(&DataKey::Verification(user.clone(), jurisdiction.clone()), &record);
+
+        // Cache in Instance storage for fast, low-cost reads (valid 24h)
+        let attestation = Attestation {
+            tier,
+            expires_at: now + ATTESTATION_TTL,
+        };
+        env.storage()
+            .instance()
+            .set(&DataKey::Attestation(user, jurisdiction), &attestation);
     }
 
     /// Checks if a user is verified for a specific jurisdiction
@@ -70,11 +92,34 @@ impl IdentityContract {
         Self::get_tier(env, user, jurisdiction) > 0
     }
 
-    /// Checks the KYC tier level for a user for a specific jurisdiction
+    /// Checks the KYC tier level for a user for a specific jurisdiction.
+    /// First checks the Instance storage attestation cache (cheap); falls back
+    /// to persistent storage and refreshes the cache if the attestation is missing
+    /// or expired.
     pub fn get_tier(env: Env, user: Address, jurisdiction: Jurisdiction) -> u32 {
-        let key = DataKey::Verification(user, jurisdiction);
+        let now = env.ledger().timestamp();
+        let attest_key = DataKey::Attestation(user.clone(), jurisdiction.clone());
+
+        // Fast path: valid Instance-storage attestation
+        if let Some(att) = env
+            .storage()
+            .instance()
+            .get::<_, Attestation>(&attest_key)
+        {
+            if att.expires_at > now {
+                return att.tier;
+            }
+        }
+
+        // Slow path: read from persistent storage and refresh cache
+        let key = DataKey::Verification(user.clone(), jurisdiction.clone());
         if let Some(record) = env.storage().persistent().get::<_, IdentityRecord>(&key) {
             if record.is_verified {
+                let attestation = Attestation {
+                    tier: record.tier,
+                    expires_at: now + ATTESTATION_TTL,
+                };
+                env.storage().instance().set(&attest_key, &attestation);
                 return record.tier;
             }
         }
@@ -86,11 +131,16 @@ impl IdentityContract {
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         admin.require_auth();
 
-        let key = DataKey::Verification(user, jurisdiction);
+        let key = DataKey::Verification(user.clone(), jurisdiction.clone());
         if let Some(mut record) = env.storage().persistent().get::<_, IdentityRecord>(&key) {
             record.is_verified = false;
             env.storage().persistent().set(&key, &record);
         }
+
+        // Invalidate the Instance cache immediately
+        env.storage()
+            .instance()
+            .remove(&DataKey::Attestation(user, jurisdiction));
     }
 
     /// Whitelists an oracle address
@@ -145,16 +195,27 @@ impl IdentityContract {
             panic!("Unauthorized: Not an authorized oracle");
         }
 
+        let now = env.ledger().timestamp();
+
         let record = IdentityRecord {
             is_verified: true,
-            verified_at: env.ledger().timestamp(),
+            verified_at: now,
             proof_hash,
             tier,
         };
 
         env.storage()
             .persistent()
-            .set(&DataKey::Verification(user, jurisdiction), &record);
+            .set(&DataKey::Verification(user.clone(), jurisdiction.clone()), &record);
+
+        // Refresh Instance cache
+        let attestation = Attestation {
+            tier,
+            expires_at: now + ATTESTATION_TTL,
+        };
+        env.storage()
+            .instance()
+            .set(&DataKey::Attestation(user, jurisdiction), &attestation);
     }
 }
 

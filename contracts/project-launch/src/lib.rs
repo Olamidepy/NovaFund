@@ -13,8 +13,8 @@ use shared::{
     },
     errors::Error,
     events::{
-        CONTRACT_PAUSED, CONTRACT_RESUMED, CONTRIBUTION_MADE, PROJECT_CREATED, PROJECT_FAILED,
-        REFUND_ISSUED, RWA_METADATA_UPDATED, UPGRADE_CANCELLED, UPGRADE_EXECUTED,
+        CONTRACT_PAUSED, CONTRACT_RESUMED, CONTRIBUTION_MADE, PROJECT_CANCELLED, PROJECT_CREATED,
+        PROJECT_FAILED, REFUND_ISSUED, RWA_METADATA_UPDATED, UPGRADE_CANCELLED, UPGRADE_EXECUTED,
         UPGRADE_SCHEDULED,
     },
     types::{Jurisdiction, PauseState, PendingUpgrade},
@@ -427,8 +427,36 @@ impl ProjectLaunch {
         Ok(())
     }
 
+    /// Cancel a project. Restricted to the project creator.
+    /// Only allowed when status is Active and no funds have been raised yet.
+    pub fn cancel_project(env: Env, project_id: u64, creator: Address) -> Result<(), Error> {
+        creator.require_auth();
+
+        let mut project: Project = env
+            .storage()
+            .instance()
+            .get(&(DataKey::Project, project_id))
+            .ok_or(Error::NotFound)?;
+
+        if project.creator != creator {
+            return Err(Error::Unauthorized);
+        }
+
+        if project.status != ProjectStatus::Active || project.total_raised != 0 {
+            return Err(Error::InvStatus);
+        }
+
+        project.status = ProjectStatus::Cancelled;
+        env.storage()
+            .instance()
+            .set(&(DataKey::Project, project_id), &project);
+
+        env.events().publish((PROJECT_CANCELLED,), (project_id, creator));
+
+        Ok(())
+    }
+
     /// Refund a specific contributor
-    /// Can be called by the contributor or any permissionless caller
     pub fn refund_contributor(
         env: Env,
         project_id: u64,

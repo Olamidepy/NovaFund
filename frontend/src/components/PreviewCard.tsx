@@ -34,6 +34,8 @@ export default function PreviewCard({ data }: PreviewCardProps) {
               alt="Project preview" 
               fill
               className="object-cover rounded-lg"
+              placeholder="blur"
+              blurDataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mOMjY39zwAEhQJnxZ6A3QAAAABJRU5ErkJggg=="
               unoptimized
             />
           ) : (
