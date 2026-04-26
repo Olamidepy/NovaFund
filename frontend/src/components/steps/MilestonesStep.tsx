@@ -1,7 +1,7 @@
 "use client";
 
 import { ProjectFormData, Milestone, ValidationErrors } from '@/types/project';
-import { Plus, Trash2, Calendar } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Term } from '@/components/ui';
 
