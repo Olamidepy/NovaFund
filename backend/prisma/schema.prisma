@@ -60,6 +60,7 @@ model Project {
   deadline     DateTime
   ipfsHash     String?       @map("ipfs_hash")
   status       ProjectStatus @default(ACTIVE)
+  tags         String[]      @default([]) @map("tags")
   tokenAddress String?       @map("token_address")
   restrictedRegions String[] @default([]) @map("restricted_regions")
   createdAt    DateTime      @default(now()) @map("created_at")
@@ -732,4 +733,41 @@ enum AssetRiskLevel {
   MEDIUM
   HIGH
   CRITICAL
+}
+
+// ── Governance ────────────────────────────────────────────────────────────────
+
+model GovernanceProposal {
+  id          String      @id @default(cuid())
+  title       String
+  description String
+  payload     String      // JSON-encoded on-chain transaction XDR
+  quorum      Int         // minimum signatures required
+  status      ProposalStatus @default(OPEN)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  signatures  GovernanceSignature[]
+
+  @@map("governance_proposals")
+}
+
+model GovernanceSignature {
+  id          String   @id @default(cuid())
+  proposalId  String   @map("proposal_id")
+  signerKey   String   @map("signer_key")   // Ed25519 public key (Stellar account)
+  signature   String                          // Base64-encoded Ed25519 signature
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  proposal    GovernanceProposal @relation(fields: [proposalId], references: [id])
+
+  @@unique([proposalId, signerKey])
+  @@map("governance_signatures")
+}
+
+enum ProposalStatus {
+  OPEN
+  QUORUM_REACHED
+  EXECUTED
+  CANCELLED
 }

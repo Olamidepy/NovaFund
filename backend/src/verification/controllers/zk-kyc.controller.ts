@@ -7,16 +7,23 @@ import {
   UseGuards,
   Request,
   BadRequestException,
+  Headers,
+  RawBodyRequest,
+  Req,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ZkKycService, ZkKycVerificationRequest } from '../services/zk-kyc.service';
 import { InitiateZkKycDto, CompleteZkKycDto, ZkKycStatusDto } from '../dto/zk-kyc.dto';
 import { JwtAuthGuard } from '../../guards/jwt-auth.guard';
+import { WebhookHandler } from '../webhook-handler';
 
 @Controller('verification/zk-kyc')
 @UseGuards(JwtAuthGuard)
 export class ZkKycController {
-  constructor(private readonly zkKycService: ZkKycService) {}
+  constructor(
+    private readonly zkKycService: ZkKycService,
+    private readonly webhookHandler: WebhookHandler,
+  ) {}
 
   /**
    * Initiate ZK-KYC verification process
@@ -99,20 +106,22 @@ export class ZkKycController {
   }
 
   /**
-   * Webhook callback for ZK-KYC providers
-   * This endpoint is called by the ZK-KYC providers when verification is complete
+   * Webhook callback for ZK-KYC providers.
+   * Verifies the provider's asymmetric signature and timestamp before processing.
+   * Requires raw body parsing to be enabled for this route.
    */
   @Post('callback/:provider')
   async handleCallback(
     @Param('provider') provider: string,
-    @Body() callbackData: any,
+    @Headers('x-signature') signature: string,
+    @Req() req: RawBodyRequest<Request>,
   ) {
-    // This would be called by Violet/Galxe when verification is complete
-    // Implementation depends on the specific provider's webhook format
+    const rawBody = (req as any).rawBody as Buffer;
+    if (!rawBody) {
+      throw new BadRequestException('Raw body not available');
+    }
 
-    // For now, just log the callback
-    console.log(`ZK-KYC callback from ${provider}:`, callbackData);
-
-    return { success: true };
+    const payload = this.webhookHandler.verifyAndParse(rawBody, signature, provider);
+    return { success: true, userId: payload.userId, status: payload.status };
   }
 }

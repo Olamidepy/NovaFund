@@ -8,6 +8,7 @@ import { VioletProvider } from './services/providers/violet.provider';
 import { GalxeProvider } from './services/providers/galxe.provider';
 import { KycAdminController } from './controllers/kyc-admin.controller';
 import { ZkKycController } from './controllers/zk-kyc.controller';
+import { WebhookHandler } from './webhook-handler';
 
 @Module({
   imports: [
@@ -19,7 +20,8 @@ import { ZkKycController } from './controllers/zk-kyc.controller';
     ZkKycService,
     VioletProvider,
     GalxeProvider,
+    WebhookHandler,
   ],
-  exports: [ZkKycService],
+  exports: [ZkKycService, WebhookHandler],
 })
 export class VerificationModule {}
