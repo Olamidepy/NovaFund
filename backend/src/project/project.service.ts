@@ -82,6 +82,7 @@ export class ProjectService {
     take?: number;
     status?: string;
     category?: string;
+    tags?: string[];
     filter?: any;
   } = {}, requiredFields?: string[]): Promise<ProjectList> {
     const cacheKey = RedisService.getProjectListKey(filters);
@@ -93,13 +94,18 @@ export class ProjectService {
       return cachedResult;
     }
 
-    const { skip = 0, take = 20, status, category, filter } = filters;
+    const { skip = 0, take = 20, status, category, tags, filter } = filters;
 
     const where: any = {};
     
     // Handle legacy exact match filters
     if (status) where.status = status;
     if (category) where.category = category;
+
+    // Tag-based filtering: uses the DB index on the tags array column
+    if (tags && tags.length > 0) {
+      where.tags = { hasSome: tags };
+    }
 
     // Handle advanced filter operators
     if (filter) {
@@ -231,6 +237,7 @@ export class ProjectService {
       title: project.title,
       description: project.description,
       category: project.category,
+      tags: project.tags ?? [],
       goal: project.goal ? Number(project.goal) : 0,
       currentFunds: project.currentFunds ? Number(project.currentFunds) : 0,
       deadline: project.deadline ? project.deadline.toISOString() : '',
@@ -255,6 +262,7 @@ export class ProjectService {
         title: true,
         description: true,
         category: true,
+        tags: true,
         goal: true,
         currentFunds: true,
         deadline: true,
@@ -281,6 +289,7 @@ export class ProjectService {
       title: 'title',
       description: 'description',
       category: 'category',
+      tags: 'tags',
       goal: 'goal',
       currentFunds: 'currentFunds',
       deadline: 'deadline',

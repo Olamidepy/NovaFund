@@ -21,6 +21,9 @@ export class Project {
   @Field()
   category: string;
 
+  @Field(() => [String], { defaultValue: [] })
+  tags: string[];
+
   @Field(() => Float)
   goal: number;
 
