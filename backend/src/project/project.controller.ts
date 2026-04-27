@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, Patch, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query, Patch, Body, UseGuards, Req } from '@nestjs/common';
 import { ApiKeyGuard } from '../guards/api-key.guard';
 import { Scopes } from '../decorators/scopes.decorator';
 import { ProjectService } from './project.service';
@@ -9,13 +9,21 @@ export class ProjectController {
   constructor(private readonly projectService: ProjectService) {}
 
   @Get(':id')
-  async getProject(@Param('id') id: string): Promise<Project> {
-    return this.projectService.findById(id);
+  async getProject(
+    @Param('id') id: string,
+    @Query('fields') fields?: string,
+  ): Promise<Partial<Project>> {
+    const requiredFields = fields ? fields.split(',') : undefined;
+    return this.projectService.findById(id, requiredFields);
   }
 
   @Get('contract/:contractId')
-  async getProjectByContractId(@Param('contractId') contractId: string): Promise<Project> {
-    return this.projectService.findByContractId(contractId);
+  async getProjectByContractId(
+    @Param('contractId') contractId: string,
+    @Query('fields') fields?: string,
+  ): Promise<Partial<Project>> {
+    const requiredFields = fields ? fields.split(',') : undefined;
+    return this.projectService.findByContractId(contractId, requiredFields);
   }
 
   @Get()
@@ -24,26 +32,41 @@ export class ProjectController {
     @Query('take') take?: number,
     @Query('status') status?: string,
     @Query('category') category?: string,
+    @Query('fields') fields?: string,
   ) {
+    const requiredFields = fields ? fields.split(',') : undefined;
     return this.projectService.findAll({ 
       skip: skip ? parseInt(skip.toString()) : undefined,
       take: take ? parseInt(take.toString()) : undefined,
       status,
       category,
-    });
+    }, requiredFields);
   }
 
   @Get('active/list')
-  async getActiveProjects(@Query('limit') limit?: number) {
-    return this.projectService.findActiveProjects(limit ? parseInt(limit.toString()) : undefined);
+  async getActiveProjects(
+    @Query('limit') limit?: number,
+    @Query('fields') fields?: string,
+  ) {
+    const requiredFields = fields ? fields.split(',') : undefined;
+    return this.projectService.findActiveProjects(
+      limit ? parseInt(limit.toString()) : undefined,
+      requiredFields,
+    );
   }
 
   @Get('creator/:creatorId')
   async getProjectsByCreator(
     @Param('creatorId') creatorId: string,
     @Query('limit') limit?: number,
+    @Query('fields') fields?: string,
   ) {
-    return this.projectService.findByCreator(creatorId, limit ? parseInt(limit.toString()) : undefined);
+    const requiredFields = fields ? fields.split(',') : undefined;
+    return this.projectService.findByCreator(
+      creatorId,
+      limit ? parseInt(limit.toString()) : undefined,
+      requiredFields,
+    );
   }
 
   @Patch(':id')

@@ -1,7 +1,8 @@
-import * as Sentry from '@sentry/node';
+﻿import * as Sentry from '@sentry/node';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import * as compression from 'compression';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -13,7 +14,16 @@ async function bootstrap() {
     environment: configService.get<string>('NODE_ENV', 'development'),
   });
 
-  // Global validation pipe
+  app.use(compression({
+    threshold: 1024,
+    filter: (req, res) => {
+      if (req.headers['x-no-compression']) {
+        return false;
+      }
+      return compression.filter(req, res);
+    },
+  }));
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -22,11 +32,8 @@ async function bootstrap() {
     }),
   );
 
-  // API prefix
   const apiPrefix = configService.get<string>('API_PREFIX', 'api/v1');
   app.setGlobalPrefix(apiPrefix);
-
-  // CORS
   app.enableCors();
 
   const port = configService.get<number>('PORT', 3000);

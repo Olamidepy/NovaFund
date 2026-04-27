@@ -7,8 +7,8 @@ import {
   Networks,
   Operation,
   Asset,
-  BASE_FEE,
 } from '@stellar/stellar-sdk';
+import { DynamicFeeService } from './dynamic-fee.service';
 
 @Injectable()
 export class StellarService {
@@ -17,7 +17,10 @@ export class StellarService {
   private readonly networkPassphrase: string;
   private readonly sponsorKeypair: Keypair;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly dynamicFeeService: DynamicFeeService,
+  ) {
     const horizonUrl = this.configService.get<string>(
       'stellar.horizonUrl',
       'https://horizon-testnet.stellar.org',
@@ -43,25 +46,29 @@ export class StellarService {
    * @param userId - ID of the user (or their wallet address if stored as such)
    * @param amount - Amount in stroops
    */
-  async processRefund(userId: string, amount: string | bigint): Promise<void> {
+  async processRefund(
+    userId: string,
+    amount: string | bigint,
+    priority: 'low' | 'medium' | 'high' | 'urgent' = 'medium',
+  ): Promise<void> {
     this.logger.log(`Processing refund for user ${userId}, amount: ${amount}`);
     
-    // In a real app, we'd resolve userId to a Stellar address
-    // For this implementation, we'll assume userId is the address or we have a way to get it
-    // Let's assume we find the address from the database or it's passed as userId
-    const userAddress = userId; // Fallback to userId as address for now
+    const userAddress = userId;
 
     try {
+      // Get dynamic fee based on network conditions
+      const feeConfig = await this.dynamicFeeService.getDynamicFee(priority, false);
+      
       const account = await this.horizonServer.loadAccount(this.sponsorKeypair.publicKey());
       const transaction = new TransactionBuilder(account, {
-        fee: BASE_FEE,
+        fee: feeConfig.totalFee.toString(), // Use dynamic fee instead of BASE_FEE
         networkPassphrase: this.networkPassphrase,
       })
         .addOperation(
           Operation.payment({
             destination: userAddress,
             asset: Asset.native(),
-            amount: (Number(amount) / 10_000_000).toString(), // Convert stroops to XLM
+            amount: (Number(amount) / 10_000_000).toString(),
           }),
         )
         .setTimeout(30)
@@ -69,7 +76,7 @@ export class StellarService {
 
       transaction.sign(this.sponsorKeypair);
       await this.horizonServer.submitTransaction(transaction);
-      this.logger.log(`Refund transaction successful for user ${userId}`);
+      this.logger.log(`Refund successful for user ${userId} with fee: ${feeConfig.totalFee} stroops`);
     } catch (error) {
       this.logger.error(`Refund failed for user ${userId}: ${error.message}`);
       throw new InternalServerErrorException(`Failed to process refund: ${error.message}`);
@@ -80,7 +87,7 @@ export class StellarService {
    * Get balances for a specific wallet address
    * @param walletAddress - The public key of the wallet to query
    */
-  async getBalances(walletAddress?: string): Promise<Horizon.BalanceLine[]> {
+  async getBalances(walletAddress?: string): Promise<any[]> {
     const address = walletAddress || this.sponsorKeypair.publicKey();
     const account = await this.horizonServer.loadAccount(address);
     return account.balances;
@@ -93,6 +100,7 @@ export class StellarService {
    * @param amount - The amount to swap
    * @param walletAddress - The wallet address to perform the swap from (defaults to sponsor)
    * @param secretKey - The secret key for signing (defaults to sponsor)
+   * @param isHighValue - Whether this is a high-value transaction requiring priority
    */
   async executeSwap(
     sourceAsset: Asset,
@@ -100,6 +108,7 @@ export class StellarService {
     amount: string,
     walletAddress?: string,
     secretKey?: string,
+    isHighValue: boolean = false,
   ): Promise<void> {
     this.logger.log(`Executing swap: ${amount} ${sourceAsset.code} -> ${destAsset.code}`);
     
@@ -109,9 +118,12 @@ export class StellarService {
       
       const account = await this.horizonServer.loadAccount(address);
       
-      // We use pathPaymentStrictSend to swap exactly 'amount' of source asset
+      // Get dynamic fee with priority bidding for high-value transactions
+      const priority = isHighValue ? 'urgent' : 'high';
+      const feeConfig = await this.dynamicFeeService.getDynamicFee(priority, isHighValue);
+      
       const transaction = new TransactionBuilder(account, {
-        fee: BASE_FEE,
+        fee: feeConfig.totalFee.toString(), // Use dynamic fee
         networkPassphrase: this.networkPassphrase,
       })
         .addOperation(
@@ -120,7 +132,7 @@ export class StellarService {
             sendAmount: amount,
             destination: address,
             destAsset: destAsset,
-            destMin: '0.0000001', // Accept any amount for rebalancing (careful in prod)
+            destMin: '0.0000001',
             path: [],
           }),
         )
@@ -129,7 +141,7 @@ export class StellarService {
 
       transaction.sign(keypair);
       await this.horizonServer.submitTransaction(transaction);
-      this.logger.log('Swap executed successfully');
+      this.logger.log(`Swap executed successfully with fee: ${feeConfig.totalFee} stroops`);
     } catch (error) {
       this.logger.error(`Swap failed: ${error.message}`);
       throw new InternalServerErrorException(`Failed to execute swap: ${error.message}`);

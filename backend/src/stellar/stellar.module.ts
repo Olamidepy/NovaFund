@@ -13,6 +13,7 @@ import { AccountingService } from './accounting.service';
 import { EcosystemSyncService } from './ecosystem-sync.service';
 import { StellarInsightsResolver } from './stellar-insights.resolver';
 import { StellarService } from './stellar.service';
+import { DynamicFeeService } from './dynamic-fee.service';
 import { ReservesService } from './reserves.service';
 import { OracleModule } from '../oracle/oracle.module';
 
@@ -32,6 +33,7 @@ import { OracleModule } from '../oracle/oracle.module';
     StellarInsightsResolver,
     PrismaService,
     StellarService,
+    DynamicFeeService,
     ReservesService,
   ],
   controllers: [
@@ -47,6 +49,7 @@ import { OracleModule } from '../oracle/oracle.module';
     AccountingService,
     EcosystemSyncService,
     StellarService,
+    DynamicFeeService,
     ReservesService,
   ],
 })
